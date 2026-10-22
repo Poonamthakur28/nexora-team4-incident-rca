@@ -1,0 +1,13 @@
+node_modules/
+api/node_modules/
+ui/node_modules/
+dist/
+api/dist/
+ui/dist/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+*.tsbuildinfo
