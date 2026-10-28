@@ -13,13 +13,14 @@ Contributions must stay within Team 4's incident management and RCA ownership. D
 
 ## Code style
 
-- TypeScript strict mode is enabled. Use Prettier and ESLint conventions.
-- Backend code belongs in `api/`. Frontend code belongs in `ui/`. Keep routes/controllers thin; put business rules in module services and persistence behind repositories.
-- Validate untrusted request data at boundaries with Zod.
+- Backend: Python 3.11+, FastAPI, Pydantic, SQLAlchemy, Alembic. Use type hints throughout.
+- Frontend: TypeScript strict mode is enabled. Use Prettier and ESLint conventions.
+- Backend code belongs in `api/`. Frontend code belongs in `ui/`. Keep routes thin; put business rules in module services and persistence behind repositories.
+- Validate untrusted request data at boundaries with Pydantic models.
 - Use typed external references instead of recreating other teams' entities.
 - Keep AI candidates traceable to evidence and subject to human review.
 - Use UTC timestamps and never commit secrets or real incident data.
 
 ## Checks
 
-Run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build` before opening a pull request. Add tests for implemented behavior; do not create migrations for unresolved ERD hypotheses.
+Run `npm test` (pytest), `npm run lint`, `npm run typecheck`, and `npm run build` before opening a pull request. Add tests for implemented behavior; do not create migrations for unresolved ERD hypotheses.
