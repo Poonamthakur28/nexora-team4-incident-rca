@@ -51,4 +51,4 @@ The likely workflow suggests incident → event/timeline/evidence/investigation;
 
 ## Local development
 
-Use `database/fixtures/` for clearly synthetic, Team 4-only data. Do not use fixtures to imply cross-team integration. Once relationships are approved, add migrations in `database/migrations/` and corresponding Prisma models in `api/prisma/schema.prisma`.
+Use `database/fixtures/` for clearly synthetic, Team 4-only data. Do not use fixtures to imply cross-team integration. Once relationships are approved, add SQLAlchemy models under `api/app/` (imported from `api/app/db/models.py`) and the matching Alembic revisions in `api/alembic/versions/`.

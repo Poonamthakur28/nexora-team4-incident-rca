@@ -1,6 +1,6 @@
 # Repository structure audit — Nexora Team 4
 
-> Path note: this audit describes the repository before the `api/` and `ui/` layout. Backend code now lives under `api/src`, tests under `api/tests`, Prisma under `api/prisma`, and the frontend under `ui/`.
+> Historical record: this audit describes the earlier Express/TypeScript backend, before the `api/` and `ui/` layout. The backend has since been migrated to FastAPI. Python code lives under `api/app`, pytest tests under `api/tests`, Alembic migrations under `api/alembic`, and the frontend under `ui/`. Prisma has been removed.
 
 **Repository:** `nexora-team4-incident-rca`  
 **Scope:** Incident management and AI root cause analysis (Team 4 only)  
