@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Title | Team 4 Domain Requirements and Mock Scenario Specification |
-| Version | `0.1-draft` |
+| Version | `0.1.1-draft` |
 | Owner | Team 4 — Incident Management & AI Root Cause Analysis |
 | Implementation coordination | Team 5 |
 | Contract reference | CT-04 Incident & Evidence Contract, revision `0.2.1-draft` ([`docs/contracts/CT-04-incident-evidence-v0.2-draft.md`](../contracts/CT-04-incident-evidence-v0.2-draft.md)) |
@@ -20,10 +20,11 @@
 |---|---|---|
 | CT-04 revision `0.2.1-draft` | [`docs/contracts/CT-04-incident-evidence-v0.2-draft.md`](../contracts/CT-04-incident-evidence-v0.2-draft.md) | Header reads `0.2.1-draft`. The working-tree file matches commit `421ba6f`, which added it. |
 | Reference commit `421ba6f` | Git history on `main` | The commit exists and touches only the CT-04 v0.2 draft. **Limitation:** the CT-04 review checkpoint table does not itself record a reference commit. The commit was identified from Git history, not from the document. |
-| CT-04 fixtures | CT-04 §12 | Found: F-01 to F-26, plus F-02b. **Limitation:** F-27 and F-28 do not exist in CT-04 revision `0.2.1-draft`. They are not invented here (§13). |
-| CT-04 decisions | CT-04 §14 | D-01 to D-26 found. Statuses are copied unchanged into §14. |
-| Team 1 Integration Contract v1.0.0 | [`docs/contracts/team4_incident_management_integration_contract.md`](../contracts/team4_incident_management_integration_contract.md) | Present in the working tree. **Limitation:** it is untracked and not part of commit `421ba6f`. |
-| Team 1 Compatibility Audit | [`docs/contracts/CT-04-team1-compatibility-audit.md`](../contracts/CT-04-team1-compatibility-audit.md) | Present in the working tree. **Limitation:** it is untracked and not part of commit `421ba6f`. |
+| CT-04 fixtures | CT-04 §12 | Exactly 27 acceptance fixture IDs: F-01 through F-26, plus F-02b. Separately, the CT-04 review checkpoint records 28 JSON examples. Those counts are not interchangeable (§13). |
+| CT-04 decisions | CT-04 §14 | D-01 to D-26 found. Statuses are copied unchanged into §14. D-02 remains Needs Team 1 Input. |
+| Prior domain revision | This file at commit `23eb53f` | `0.1-draft`. This revision keeps that history and corrects it. |
+| Team 1 Integration Contract v1.0.0 | [`docs/contracts/team4_incident_management_integration_contract.md`](../contracts/team4_incident_management_integration_contract.md) | Header states Document Version 1.0.0, authored by Team 1. Present in the local working tree only. Untracked, and not part of commits `421ba6f` or `23eb53f`. Not assumed to exist in the remote repository. |
+| Team 4 Team 1 compatibility audit | [`docs/contracts/CT-04-team1-compatibility-audit.md`](../contracts/CT-04-team1-compatibility-audit.md) | Team 4 assessment dated 2026-10-30. Its header compares Team 1 contract v1.0.0 with CT-04 `0.2-draft`, and states it is not a cross-team approval. Same local-only availability. Team 1 has not approved it. |
 | Implementation baseline | `api/app/modules/*/contracts.py`, `api/app/shared/*.py`, `api/app/modules/ai_rca/mock_agent.py`, `api/tests/**` | Inspected (§1.3). |
 | CT-04 v0.1 | [`docs/contracts/CT-04-incident-evidence-v0.1.md`](../contracts/CT-04-incident-evidence-v0.1.md) | Historical draft only; not used as a source of rules. |
 
@@ -69,7 +70,8 @@ Repository evidence for "Implemented":
 
 | Version | Description |
 |---|---|
-| `0.1-draft` | Initial Team 4 domain requirements and mock scenarios, based on CT-04 `0.2.1-draft` at commit `421ba6f`. |
+| `0.1-draft` | Initial Team 4 domain requirements and mock scenarios, based on CT-04 `0.2.1-draft` at commit `421ba6f`. Preserved as commit `23eb53f`. |
+| `0.1.1-draft` | Team 5 review corrections. §15 now cites the local Team 1 integration contract and Team 4 compatibility audit, and keeps confirmed details separate from open questions. F-11 no longer describes audit delivery as exactly once. The fixture inventory is the 27 CT-04 IDs; the 28 JSON examples stay a separate count. No application implementation or contract decision changed. |
 
 ---
 
@@ -582,7 +584,7 @@ Team 1 distinguishes `user_id` (authentication account) from `employee_id` (pers
 | Concurrency | Concurrent identical submissions yield one receipt (F-08). Concurrent reprocessing yields one Incident (F-21). | D-09, D-26 |
 | Completion boundary | `completed` only after the five items commit. Team 5 proposal: one Phase 1 local transaction. Split minimum invariant remains until joint acceptance. | D-24 |
 | Evidence storage recovery | Content storage is not atomic with the database; orphans are never Evidence. | D-08, D-24 |
-| Audit outbox | Intent commits with the domain change; sink delivery is asynchronous, bounded, replayable, with a stable `eventId`. | D-12 |
+| Audit outbox | Intent commits with the domain change. Sink delivery is asynchronous and bounded. Retries and recovery reuse the same `eventId`, which is the logical audit-event identity. A delivery attempt is not that identity: the sink deduplicates repeats, and delivery may occur more than once (F-11). | D-12 |
 
 None of the Team 5 proposals above is accepted architecture.
 
@@ -1085,7 +1087,7 @@ MS-03a response:
 | Expected processing outcome | Single transaction: nothing canonical exists; attempt 1 resumes. Split variant: canonical rows exist, attempt stays `pending` until recovery records `completed` on the same attempt. |
 | Expected domain state | Exactly one Incident `...0023` and one Evidence `...0231` after recovery. |
 | Duplicate/idempotency | During the window a duplicate sees `pending`, never `completed`. |
-| Audit | Intents written once, with the canonical rows. |
+| Audit | The local audit intent is committed with the canonical rows and is not written again during recovery. Sink delivery of that intent follows F-11 and may be repeated under the same `eventId`. |
 | Open dependencies | D-24 Team 5 proposal (single Phase 1 transaction) not jointly accepted; visibility and recovery trigger. |
 
 State during the split-variant window:
@@ -1121,7 +1123,7 @@ State during the split-variant window:
 | Expected processing outcome | After the failed commit: `pending` or `retrying`. After recovery: `completed` with exactly one Evidence `...0241` and one valid `contentRef`. Repeated commit failure: `unresolved` / `PROCESSING_RETRY_EXHAUSTED`. |
 | Expected domain state | Orphaned `content_synth_0241` unreferenced unless reused. |
 | Duplicate/idempotency | Duplicates see the non-terminal state. |
-| Audit | Normal completion intents once completed. |
+| Audit | Completion audit intents are emitted when the attempt completes. Sink delivery follows F-11. |
 | Open dependencies | Reuse versus rewrite of content; orphan cleanup (D-24). |
 
 ### MS-13 — Provider event content revision
@@ -1352,7 +1354,7 @@ All fixtures are CT-04 documentation fixtures, not executable tests. Expected ou
 | F-08 | Concurrent identical submissions | Concurrency | D-09, D-10 | One receipt, one observation, one attempt | Team 5; Team 4 | Proposed fixture | Uniqueness design |
 | F-09 | Conflicting payload under the same provider event | Idempotency | D-10, D-12 | `IDEMPOTENCY_CONFLICT`; no overwrite | Team 4; Team 5 | Proposed fixture | HTTP status, replay policy |
 | F-10 | Duplicate of unresolved work | Idempotency | D-10, D-12, D-20 | Returns `unresolved`; no reprocessing | Team 4; Team 5 | Proposed fixture | D-20 |
-| F-11 | Crash after commit, before sink delivery | Audit | D-12 | Intent survives and is delivered once by `eventId` | Team 5 (CT-06) | Proposed fixture | CT-06 |
+| F-11 | Crash after commit, before sink delivery | Audit | D-12 | The intent survives. Recovery may retry delivery after the crash, and each retry uses the same `eventId`. The sink deduplicates repeated deliveries by that `eventId`. Delivery may occur more than once. This is not exactly-once delivery: `eventId` is the logical audit-event identity, and each send is a separate delivery attempt. The Incident status is unchanged, and the audit event is not lost. | Team 5 (CT-06) | Proposed fixture | CT-06 |
 | F-12 | Audit-record persistence failure | Audit | D-12 | Neither status nor intent commits | Team 5; Team 4 | Proposed fixture | Transaction design |
 | F-13 | Reprocessing after severity mapping correction | Reprocessing; severity | D-05, D-11, D-12, D-26 | Attempt 2 updates bound Incident; own correlation | Team 4; Team 5 | Proposed fixture | D-05 version format, D-26 |
 | F-14 | Mandatory event Evidence storage failure | Evidence; reliability | D-07, D-08, D-11, D-12, D-19 | `retrying` then `unresolved`; no completed Incident | Team 5; Team 4 | Proposed fixture | D-08 classification |
@@ -1368,10 +1370,8 @@ All fixtures are CT-04 documentation fixtures, not executable tests. Expected ou
 | F-24 | External content-storage recovery | Evidence storage | D-08, D-12, D-24 | Orphans never Evidence; one valid `contentRef` | Team 5; Team 4 | Proposed fixture; reviewed by Team 5 | D-08, D-24 |
 | F-25 | Provider event content revision | Provider identity | D-10, D-20, D-25 | Interim `IDEMPOTENCY_CONFLICT` | Team 4; Team 5 | Open (D-25) | D-25 |
 | F-26 | Bypass attempt with invented source event ID | Provider identity | D-10, D-20, D-25 | No second Incident; conformance defect if undetected | Team 5; Team 4 | Open (D-25) | D-25 verification |
-| F-27 | **Not found in CT-04 `0.2.1-draft`** | — | — | Not mapped | — | Missing | Confirm whether F-27 was expected |
-| F-28 | **Not found in CT-04 `0.2.1-draft`** | — | — | Not mapped | — | Missing | Confirm whether F-28 was expected |
 
-Mapped fixtures: 27 (F-01 to F-26 plus F-02b). F-27 and F-28 are recorded as missing, not invented.
+Acceptance fixture IDs: 27 (F-01 through F-26, plus F-02b). JSON examples in CT-04 `0.2.1-draft`: 28, as recorded in that document's review checkpoint. A fixture may contain several JSON examples, and some JSON examples are shared contract samples rather than fixture IDs, so the two counts are not the same thing.
 
 ---
 
@@ -1414,20 +1414,48 @@ No decision status was changed. No decision is Agreed.
 
 ## 15. Team 1 Integration Dependencies
 
-Sources: [Team 1 contract v1.0.0](../contracts/team4_incident_management_integration_contract.md) and the [compatibility audit](../contracts/CT-04-team1-compatibility-audit.md).
+### 15.1 Two different documents
 
-| Topic | Confirmed by Team 1 contract | Unresolved |
-|---|---|---|
-| UUID identifiers | `organization_id`, `department_id`, `team_id`, `employee_id`, `user_id` are immutable RFC 4122 UUIDs; business codes are mutable (§1.1, §2.1). | CT-04 still treats `organizationId` as opaque (D-02). Whether CT-04 stores Team 1 UUIDs as typed values or inside `ExternalRef` is open. |
-| User versus employee | `user_id` is an authentication account; `employee_id` is a personnel record; a user may lack an employee (§2.2). | Which form CT-04 uses for actor, assignee, reporter, and reviewer. |
-| Organization context | Users have no `organization_id`; context comes from employment, registration, and roles (§1.3). | How Team 4 derives context for users without employees (audit Q2). |
-| Membership validation | Client-supplied organization ids must be validated via `/api/v1/auth/me` and employee or organization reads (§1.4, §8.3). | Which source is authoritative; caching and revocation (audit Q4). |
-| Department and team snapshots | Transfers overwrite in place; no history; Team 1 recommends Team 4 snapshot (§7, §12.2). | Whether CT-04 adds snapshot fields (audit §6). |
-| Reviewer identity | Team 1 recommends a reviewer/approver reference (§2.3, §9). | Team 1's own guidance is inconsistent (`reviewed_by_user_id` vs `reviewed_by_employee_id`) (audit Q5). |
-| Role mapping | `/auth/me` returns role codes; Team 1 suggests `MANAGER`/`ORG_ADMIN` for critical closure and RCA approval (§5.1, §6). | Whether those are authoritative for CT-04 approvals (audit Q6). |
-| Employee lifecycle | Soft deactivation; records never deleted; open incidents should be reassigned (§7, §12.1). | Change notification mechanism (audit Q7); Team 4 reassignment rule. |
-| M2M authentication | Not implemented in Team 1; two options recommended only (§8.2). | Which mechanism, if any, is agreed (audit Q8). |
-| Service ownership boundary | Team 1 has no service catalog; its SQL is a recommendation (§3). | Coordinator ownership (D-03). Team 1's proposed tables are not Team 4 schema. |
+| Document | What it is | Repository-relative path | Version and status | Availability |
+|---|---|---|---|---|
+| Team 1 integration contract | Team 1's documented integration contract for identity, organization, and personnel. | [`docs/contracts/team4_incident_management_integration_contract.md`](../contracts/team4_incident_management_integration_contract.md) | Document Version **1.0.0**. Authoring team: Team 1. | Present in this local working tree. Untracked. Not included in commits `421ba6f` or `23eb53f`. Do not assume it is in the remote repository. |
+| Team 4 compatibility audit | Team 4's assessment of that contract against CT-04. It is not a Team 1 document and Team 1 has not approved it. | [`docs/contracts/CT-04-team1-compatibility-audit.md`](../contracts/CT-04-team1-compatibility-audit.md) | Dated 2026-10-30. Header status: documentation assessment only, not an implementation or cross-team approval. It compares the Team 1 contract with CT-04 `0.2-draft`, which is earlier than CT-04 `0.2.1-draft`. | Same local-only availability. |
+
+**D-02 remains Needs Team 1 Input.** Neither document changes that status. The audit's classifications are Team 4 findings, not agreed decisions.
+
+### 15.2 Confirmed integration details
+
+These rows are facts stated by the Team 1 integration contract v1.0.0. Section numbers refer to that contract.
+
+| Topic | Confirmed detail |
+|---|---|
+| UUID identifiers | `organization_id`, `department_id`, `team_id`, `employee_id`, and `user_id` are immutable RFC 4122 UUIDs. Business codes are mutable and are not primary foreign keys (§1.1, §2.1). |
+| User versus employee | `user_id` is an authentication account. `employee_id` is a personnel record. A user may have no employee record (§2.2). |
+| Organization context | A user record has no `organization_id`. Context is derived from employment, organization registration, and roles (§1.3). |
+| Membership validation | A client-supplied organization id is untrusted. Team 1 documents validation through `GET /api/v1/auth/me` plus an employee read, or through an organization read that returns `403` for a non-member (§1.4, §8.3). |
+| Department and team history | Transfers overwrite `team_id` and `department_id` in place. Team 1 keeps no assignment history and recommends that Team 4 snapshot them (§7, §12.2). The recommendation is not a Team 4 schema. |
+| Reviewer recommendation | Team 1 recommends a reviewer or approver reference (§2.3, §9). Its own labels disagree, as recorded under open questions. |
+| Role information | `GET /api/v1/auth/me` returns role codes. Team 1 suggests `MANAGER` or `ORG_ADMIN` for critical closure and RCA approval (§5.1, §6). That suggestion is not a confirmed CT-04 permission rule. |
+| Employee lifecycle | `DELETE /employees/{id}` soft-deactivates the employee. Records are not hard-deleted (§7, §12.1). |
+| Service-to-service authentication | Team 1 states that machine authentication is not implemented, and offers two options as recommendations only (§8.2). |
+| Service ownership | Team 1 has no service catalog. The SQL in its §3.2 and §9 is marked as a recommendation, not an approved Team 4 schema (§3). |
+
+### 15.3 Outstanding questions and dependencies
+
+These remain open. Question numbers refer to §8 of the Team 4 compatibility audit.
+
+| Topic | Outstanding question or dependency |
+|---|---|
+| Organization identifier in CT-04 | D-02 remains Needs Team 1 Input. CT-04 still treats `organizationId` as opaque. Whether a future contract stores Team 1 UUIDs as typed values or inside `ExternalRef` is unresolved. |
+| User versus employee usage | Which form CT-04 uses for actor, assignee, reporter, and reviewer. |
+| Users without employees | How Team 4 derives organization context for those users (audit question 2). |
+| Membership source | Which Team 1 call is authoritative, and what caching or revocation is allowed (audit question 4). |
+| Ownership snapshots | Whether CT-04 adds team or department snapshot fields (audit §6). |
+| Reviewer identity | Team 1 §2.3 names `reviewed_by_user_id` while allowing an employee or user target; §9 uses `reviewed_by_employee_id` (audit question 5). This specification chooses neither. |
+| Role mapping | Whether `MANAGER` and `ORG_ADMIN` are authoritative for CT-04 approvals (audit question 6). |
+| Lifecycle notification | How Team 4 learns of deactivation or transfer (audit question 7), and Team 4's reassignment rule. |
+| Machine authentication | Which mechanism, if any, is jointly chosen (audit question 8). |
+| Service catalog | Coordinator ownership under D-03. |
 
 ---
 
@@ -1521,7 +1549,6 @@ Items expected in Team 5's consolidated proposal. Nothing here is assumed accept
 | Enabling mutable-alert providers before D-25 | Lost updates or duplicate Incidents | Interim conflict rule; Team 5 proposal to gate enablement |
 | Treating mock fixtures as executable tests | False confidence | All fixtures labeled documentation-only |
 | Team 1 reviewer ambiguity | Wrong approver semantics | Question kept open |
-| F-27 and F-28 referenced but absent | Missing acceptance coverage | Recorded as missing in §13 |
 
 ---
 
@@ -1531,6 +1558,6 @@ Items expected in Team 5's consolidated proposal. Nothing here is assumed accept
 2. Team 1 resolves identity dependencies (§15, §18.1).
 3. Team 5 supplies its consolidated implementation proposal (§16).
 4. The coordinator resolves D-03.
-5. Teams review the implementation proposal against fixtures F-01 to F-26 (and confirm whether F-27 and F-28 were intended).
+5. Teams review the implementation proposal against the 27 acceptance fixture IDs: F-01 through F-26, plus F-02b.
 6. Teams jointly accept the Phase 1 baseline, recording any Agreed decisions in CT-04.
 7. Only then proceed with affected migrations and live integrations.
