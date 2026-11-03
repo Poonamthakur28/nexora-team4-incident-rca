@@ -140,6 +140,39 @@ def test_repository_returns_defensive_copies() -> None:
     assert repository.list_audit_intents(evidence.id, "org-1")[0].data.availability == "unavailable"
 
 
+def test_observation_audit_actor_need_not_match_collector() -> None:
+    repository = InMemoryEvidenceRepository()
+    moment = datetime(2026, 10, 1, 9, 30, tzinfo=UTC)
+    evidence = Evidence(
+        id=as_team4_entity_id("evidence-obs"),
+        incident_id=as_team4_entity_id("incident-1"),
+        investigation_id=None,
+        triggered_by_observation_id=None,
+        evidence_type="event",
+        description="All synthetic checks failing for 3 minutes.",
+        source_label="synthetic-monitor",
+        external_source_ref=None,
+        content_ref="content_synth_0051",
+        captured_at=moment,
+        collected_at=moment,
+        availability="available",
+        provenance=Provenance(
+            origin_type="observation",
+            provider="synthetic-monitor",
+            source_event_id="evt-10005",
+            source_account_ref=as_external_ref("synthetic-monitor", "acct_synth_0001"),
+            collector_ref=as_external_ref("team5.connector", "conn_synth_monitor_01"),
+        ),
+    )
+    intent = make_intent(evidence, actor_ref=as_external_ref("team1.user", "user-1"))
+    assert intent.actor_ref != evidence.provenance.collector_ref
+
+    repository.add(evidence, organization_id="org-1", audit_intent=intent)
+
+    assert repository.get(evidence.id, "org-1") == evidence
+    assert repository.list_audit_intents(evidence.id, "org-1") == (intent,)
+
+
 def test_repository_is_append_only_and_has_no_update_or_delete_operations() -> None:
     repository = InMemoryEvidenceRepository()
     evidence = make_evidence()

@@ -10,10 +10,12 @@ from app.modules.evidence_collection.contracts import (
     EvidenceRecordedData,
     Provenance,
     RecordManualEvidence,
+    RecordObservationEventEvidence,
 )
 from app.modules.evidence_collection.errors import (
     EvidenceNotFound,
     EvidenceServiceConfigurationError,
+    InvalidEvidenceInput,
     UnsupportedEvidenceRelationship,
     UnverifiedContentReference,
 )
@@ -29,10 +31,11 @@ def new_evidence_id() -> str:
 
 
 class EvidenceService:
-    """Record and retrieve append-only, manual Evidence metadata.
+    """Record and retrieve append-only Evidence metadata.
 
-    Observation and tool-execution creation, Investigation relationships, content
-    storage, and audit delivery are intentionally outside this milestone.
+    Manual recording and observation-origin event recording (F-04a) are
+    supported. Tool-execution creation, Investigation relationships, content
+    storage, and audit delivery remain outside this milestone.
     """
 
     def __init__(
@@ -81,6 +84,63 @@ class EvidenceService:
                 source_event_id=None,
                 source_account_ref=None,
                 collector_ref=context.actor_ref,
+            ),
+        )
+        audit_intent = EvidenceRecordedAuditIntent(
+            event_id=self._new_id(),
+            event_type="evidence.recorded",
+            organization_id=context.organization_id,
+            actor_ref=context.actor_ref,
+            resource_type="evidence",
+            resource_id=evidence.id,
+            occurred_at=collected_at,
+            correlation_id=context.correlation_id,
+            data=EvidenceRecordedData(
+                evidence_type=evidence.evidence_type,
+                availability=evidence.availability,
+            ),
+        )
+        self._repository.add(
+            evidence,
+            organization_id=context.organization_id,
+            audit_intent=audit_intent,
+        )
+        return self.get_evidence(evidence.id, context)
+
+    def record_observation_event_evidence(
+        self, command: RecordObservationEventEvidence, context: IncidentRequestContext
+    ) -> Evidence:
+        """Record F-04a event Evidence from stored Observation provenance.
+
+        Organization and actor come only from `context`. `triggered_by_observation_id`
+        is always null. Content storage is not implemented; `content_ref` is an
+        injected opaque mock verified by the existing port (D-08).
+        """
+        self._incident_lookup.get_incident(command.incident_id, context)
+        if command.provenance.origin_type != "observation":
+            raise InvalidEvidenceInput("Observation-origin Evidence requires observation provenance.")
+        self._verify_content_reference(command.content_ref, context.organization_id)
+
+        collected_at = self._now()
+        evidence = Evidence(
+            id=self._new_id(),
+            incident_id=command.incident_id,
+            investigation_id=None,
+            triggered_by_observation_id=None,
+            evidence_type="event",
+            description=command.description,
+            source_label=command.source_label,
+            external_source_ref=command.external_source_ref,
+            content_ref=command.content_ref,
+            captured_at=command.captured_at,
+            collected_at=collected_at,
+            availability="available",
+            provenance=Provenance(
+                origin_type="observation",
+                provider=command.provenance.provider,
+                source_event_id=command.provenance.source_event_id,
+                source_account_ref=command.provenance.source_account_ref,
+                collector_ref=command.provenance.collector_ref,
             ),
         )
         audit_intent = EvidenceRecordedAuditIntent(

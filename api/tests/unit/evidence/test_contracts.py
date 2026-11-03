@@ -9,6 +9,7 @@ from app.modules.evidence_collection.contracts import (
     EvidenceType,
     Provenance,
     RecordManualEvidence,
+    RecordObservationEventEvidence,
 )
 from app.shared.identifiers import as_external_ref, as_team4_entity_id
 
@@ -378,3 +379,98 @@ def test_manual_command_accepts_nullable_relationship_shape_until_service_reject
     }
     command = RecordManualEvidence.model_validate(payload)
     assert getattr(command, "investigation_id" if field == "investigationId" else "triggered_by_observation_id")
+
+
+def observation_provenance_payload(**overrides: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "originType": "observation",
+        "provider": "synthetic-monitor",
+        "sourceEventId": "evt-10005",
+        "sourceAccountRef": {"owner": "synthetic-monitor", "id": "acct_synth_0001"},
+        "collectorRef": {"owner": "team5.connector", "id": "conn_synth_monitor_01"},
+    }
+    value.update(overrides)
+    return value
+
+
+def observation_command_payload(**overrides: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "incidentId": "incident-1",
+        "description": "All synthetic checks failing for 3 minutes.",
+        "sourceLabel": "synthetic-monitor",
+        "contentRef": "content_synth_0051",
+        "capturedAt": "2026-10-01T11:00:00Z",
+        "provenance": observation_provenance_payload(),
+    }
+    value.update(overrides)
+    return value
+
+
+def test_observation_event_command_accepts_f04a_shape() -> None:
+    command = RecordObservationEventEvidence.model_validate(observation_command_payload())
+
+    assert command.content_ref == "content_synth_0051"
+    assert command.provenance.origin_type == "observation"
+    assert command.provenance.source_event_id == "evt-10005"
+    assert "triggered_by_observation_id" not in RecordObservationEventEvidence.model_fields
+    assert "organization_id" not in RecordObservationEventEvidence.model_fields
+    assert "actor_ref" not in RecordObservationEventEvidence.model_fields
+    assert "evidence_type" not in RecordObservationEventEvidence.model_fields
+    assert "availability" not in RecordObservationEventEvidence.model_fields
+
+
+def test_observation_event_command_rejects_system_managed_and_trusted_fields() -> None:
+    payload = observation_command_payload(
+        id="evidence-1",
+        organizationId="org-1",
+        actorRef={"owner": "team1.user", "id": "forged"},
+        collectedAt="2026-10-01T11:01:00Z",
+        evidenceType="log",
+        availability="partial",
+        triggeredByObservationId="observation-1",
+        investigationId="investigation-1",
+    )
+    with pytest.raises(ValidationError) as caught:
+        RecordObservationEventEvidence.model_validate(payload)
+    paths = {tuple(error["loc"]) for error in caught.value.errors()}
+    assert {
+        ("id",),
+        ("organizationId",),
+        ("actorRef",),
+        ("collectedAt",),
+        ("evidenceType",),
+        ("availability",),
+        ("triggeredByObservationId",),
+        ("investigationId",),
+    } <= paths
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"originType": "manual", "provider": None, "sourceEventId": None, "sourceAccountRef": None},
+        {"originType": "tool_execution", "sourceEventId": None, "sourceAccountRef": None},
+        {"provider": None},
+        {"sourceEventId": None},
+    ],
+)
+def test_observation_event_command_rejects_invalid_provenance(override: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        RecordObservationEventEvidence.model_validate(
+            observation_command_payload(provenance=observation_provenance_payload(**override))
+        )
+
+
+@pytest.mark.parametrize("content_ref", [None, "", "   "])
+def test_observation_event_command_requires_a_non_blank_content_ref(content_ref: str | None) -> None:
+    payload = observation_command_payload()
+    payload["contentRef"] = content_ref
+    with pytest.raises(ValidationError):
+        RecordObservationEventEvidence.model_validate(payload)
+
+
+def test_observation_event_command_preserves_opaque_content_ref_whitespace() -> None:
+    command = RecordObservationEventEvidence.model_validate(
+        observation_command_payload(contentRef="  content_synth_0051  ")
+    )
+    assert command.content_ref == "  content_synth_0051  "

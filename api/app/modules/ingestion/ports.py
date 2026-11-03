@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.modules.incidents.contracts import IncidentSeverity
+from app.modules.ingestion.contracts import Observation
 from app.modules.ingestion.errors import InvalidConnectorContext
 from app.shared.identifiers import ExternalRef
 
@@ -28,6 +29,29 @@ class AuthenticatedConnectorContext:
         object.__setattr__(self, "organization_id", self.organization_id.strip())
         if not _is_registration_ref(self.registration_ref):
             raise InvalidConnectorContext("A trusted connector registration is required.")
+
+
+class ContentReferenceFactory(Protocol):
+    """Opaque mock `content_ref` for process-local completion (D-08).
+
+    This port does not store, upload, or read content. Implementations are
+    injected test stand-ins, not Team 5 storage.
+    """
+
+    def content_ref(self, observation: Observation) -> str:
+        """Return one opaque content reference for this stored Observation."""
+
+
+class StaticContentReferenceFactory:
+    """Returns a fixed opaque mock reference. The value is not interpreted."""
+
+    def __init__(self, content_ref: str) -> None:
+        if not isinstance(content_ref, str) or not content_ref.strip():
+            raise ValueError("A mock content reference is required.")
+        self._content_ref = content_ref
+
+    def content_ref(self, observation: Observation) -> str:
+        return self._content_ref
 
 
 class SourceAccountAuthorizer(Protocol):

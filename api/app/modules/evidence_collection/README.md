@@ -1,8 +1,9 @@
 # RCA-004 Evidence Collection Core
 
-This module records manual, append-only Evidence metadata in memory. It has no
+This module records append-only Evidence metadata in memory. Manual recording
+and observation-origin event recording (F-04a) are supported. It has no
 database models, migrations, routes, content storage, connector, Observation
-ingestion, Investigation entity, or audit delivery.
+ingestion coordinator, Investigation entity, or audit delivery.
 
 ## Tenant-aware verifier boundary
 
@@ -53,6 +54,29 @@ instead of inventing a new requirement.
 
 Manual commands reject non-null Investigation and Observation-trigger
 relationships because those records and workflows are not implemented.
+
+## Observation-origin event Evidence
+
+`EvidenceService.record_observation_event_evidence` records F-04a event
+Evidence. `evidence_type` is `event`, `availability` is `available`, and
+`triggered_by_observation_id` is always null. Provenance is copied from the
+command's Observation provenance (`provider`, `sourceEventId`,
+`sourceAccountRef`, `collectorRef`) and re-validated by the existing
+`Provenance` rules, including RCA-004 trimming of `provider` and
+`sourceEventId`. This module does not read the Observation top-level
+`sourceEventId`, so the M1/M4 opaque/trim asymmetry is unchanged.
+
+Organization and actor come only from trusted `IncidentRequestContext`. The
+command has no organization, actor, Evidence id, collection time,
+`evidence_type`, `availability`, or `triggeredByObservationId` fields.
+`content_ref` is a required opaque mock reference checked by the existing
+verifier (D-08). There is no live content store.
+
+The repository's collector/actor match check stays limited to manual
+Evidence. Observation-origin `collectorRef` is the connector; the audit
+actor is the trusted context actor and may differ.
+
+`record_manual_evidence` is unchanged.
 
 Each successful write stores an undelivered `evidence.recorded` intent with the
 Evidence record. The intent's `data` payload is provisional: CT-04 requires the

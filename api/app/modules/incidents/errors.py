@@ -68,3 +68,15 @@ class IncidentConcurrencyConflict(IncidentDomainError):
 
 class IncidentServiceConfigurationError(IncidentDomainError):
     """An injected clock or id factory produced a value the service cannot use."""
+
+
+class UncertainIncidentCreate(IncidentDomainError):
+    """`create_incident` stored an incident, then failed before returning it.
+
+    `incident_id` is the locally generated id. This is not a unique observation
+    key, a shared transaction, or an `incident.created` audit.
+    """
+
+    def __init__(self, incident_id: str) -> None:
+        self.incident_id = incident_id
+        super().__init__("The incident was stored but could not be returned.")

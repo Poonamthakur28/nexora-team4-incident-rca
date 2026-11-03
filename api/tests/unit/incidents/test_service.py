@@ -15,6 +15,7 @@ from app.modules.incidents.errors import (
     InvalidRequestContext,
     OrganizationScopeError,
     SameStatusTransition,
+    UncertainIncidentCreate,
 )
 from app.modules.incidents.repository import InMemoryIncidentRepository
 from app.modules.incidents.service import IncidentService
@@ -465,6 +466,25 @@ def test_stale_assignment_is_a_conflict() -> None:
 
 
 # Injected clock and id factory
+
+
+def test_reload_failure_after_add_raises_uncertain_create() -> None:
+    repository = InMemoryIncidentRepository()
+    incident_service = IncidentService(repository, id_factory=IdFactory(), clock=Clock())
+
+    def boom(incident_id, context):
+        raise RuntimeError("secret reload")
+
+    incident_service.get_incident = boom  # type: ignore[method-assign]
+
+    with pytest.raises(UncertainIncidentCreate) as caught:
+        incident_service.create_incident(create_command(), context())
+
+    assert caught.value.incident_id == "id-1"
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    stored = repository.get("id-1", ORG)
+    assert stored is not None
+    assert stored.incident.id == "id-1"
 
 
 @pytest.mark.parametrize("bad_id", ["", "   ", 42, None])

@@ -39,3 +39,10 @@ class ObservationIdempotencyConflict(IngestionDomainError):
 
 class IngestionConfigurationError(IngestionDomainError):
     """An injected authorizer, hasher, resolver, mapper, or other dependency failed."""
+
+
+class ObservationNotReadyForCompletion(IngestionDomainError):
+    """Completion requires a stored Stage 2 ready assessment."""
+
+    def __init__(self) -> None:
+        super().__init__("Completion requires a ready Stage 2 assessment.")

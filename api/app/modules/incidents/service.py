@@ -24,6 +24,7 @@ from app.modules.incidents.errors import (
     IncidentServiceConfigurationError,
     InvalidIncidentInput,
     InvalidRequestContext,
+    UncertainIncidentCreate,
 )
 from app.modules.incidents.lifecycle import validate_transition
 from app.modules.incidents.repository import IncidentRepository, VersionedIncident
@@ -79,7 +80,12 @@ class IncidentService:
             updated_at=now,
         )
         self._repository.add(incident)
-        return self.get_incident(incident.id, context)
+        try:
+            return self.get_incident(incident.id, context)
+        except UncertainIncidentCreate:
+            raise
+        except Exception as exc:
+            raise UncertainIncidentCreate(str(incident.id)) from exc
 
     def get_incident(self, incident_id: Team4EntityId, context: IncidentRequestContext) -> Incident:
         return self._load(incident_id, context).incident

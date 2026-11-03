@@ -136,6 +136,9 @@ def assert_no_completion(result: IngestionResult) -> None:
     assert not hasattr(result.reservation, "delivery_id")
     assert not hasattr(result.reservation.record, "in_flight")
     assert not hasattr(result.reservation.record, "attempt")
+    assert not hasattr(result.reservation.record, "completed")
+    assert not hasattr(result.reservation.record, "processing_status")
+    assert result.reservation.record.binding is None
 
 
 def assert_ready(assessment: Stage2Assessment) -> None:
@@ -611,11 +614,14 @@ def test_unexpected_exception_releases_waiters_and_leaves_no_assessment(monkeypa
 
 def test_no_incident_evidence_receipt_or_attempt_is_created() -> None:
     result = stage2_service().assess(observation(), context(), authorizer())
-    source = inspect.getsource(ingestion_service_module)
+    accept_src = inspect.getsource(ObservationIngestionService.accept)
+    assess_src = inspect.getsource(ObservationIngestionService.assess)
 
     assert_no_completion(result)
-    assert "IncidentService" not in source
-    assert "EvidenceService" not in source
+    assert "create_incident" not in accept_src
+    assert "create_incident" not in assess_src
+    assert "record_observation_event_evidence" not in accept_src
+    assert "record_observation_event_evidence" not in assess_src
 
 
 def test_empty_severity_mapper_table_stays_unmapped() -> None:

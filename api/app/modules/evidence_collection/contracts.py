@@ -184,6 +184,65 @@ class RecordManualEvidence(ContractModel):
         return self
 
 
+class RecordObservationEventEvidence(ContractModel):
+    """Caller input for observation-origin event Evidence (F-04a).
+
+    Organization, actor, collection time, Evidence id, `evidence_type`, and
+    `availability` are system-managed. `triggered_by_observation_id` is not a
+    field: F-04a event Evidence keeps it null. Provenance must already be the
+    stored Observation provenance; this command does not invent one.
+    """
+
+    incident_id: Team4EntityId
+    description: str
+    source_label: str
+    content_ref: str
+    captured_at: AwareDatetime
+    provenance: Provenance
+    external_source_ref: ExternalRef | None = None
+
+    @field_validator("incident_id")
+    @classmethod
+    def _incident_id(cls, value: Team4EntityId) -> Team4EntityId:
+        if not value.strip():
+            raise ValueError("incident_id must be non-empty")
+        return value
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str) -> str:
+        return normalize_required_text(value)
+
+    @field_validator("source_label")
+    @classmethod
+    def _source_label(cls, value: str) -> str:
+        return normalize_source_label(value)
+
+    @field_validator("content_ref")
+    @classmethod
+    def _content_ref(cls, value: str) -> str:
+        from app.modules.evidence_collection.validation import validate_opaque_content_reference
+
+        verified = validate_opaque_content_reference(value)
+        if verified is None:
+            raise ValueError("content_ref is required")
+        return verified
+
+    @field_validator("captured_at")
+    @classmethod
+    def _captured_at(cls, value: datetime) -> datetime:
+        return as_utc(value)
+
+    @model_validator(mode="after")
+    def _observation_event_shape(self) -> "RecordObservationEventEvidence":
+        from app.modules.evidence_collection.validation import validate_availability_shape
+
+        if self.provenance.origin_type != "observation":
+            raise ValueError("Observation-origin Evidence requires observation provenance.")
+        validate_availability_shape("available", self.content_ref)
+        return self
+
+
 class EvidenceRecordedData(ContractModel):
     """Provisional local audit payload; CT-04/CT-06 do not define it yet."""
 
