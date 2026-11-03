@@ -183,6 +183,32 @@ def test_get_returns_the_incident_in_the_trusted_organization() -> None:
     assert incident_service.get_incident(created.id, context()) == created
 
 
+def test_list_status_transitions_is_empty_until_a_status_change() -> None:
+    incident_service, repository, ids, _ = service_for()
+    created = incident_service.create_incident(create_command(), context())
+
+    assert incident_service.list_status_transitions(created.id, context()) == ()
+
+    changed = incident_service.change_status(created.id, change("investigating"), context())
+
+    assert incident_service.list_status_transitions(created.id, context()) == (changed.transition,)
+    assert repository.list_audit_intents(created.id, ORG) == (changed.audit_intent,)
+    assert ids.issued == ["id-1", "id-2"]
+
+
+def test_list_status_transitions_is_not_found_for_missing_or_other_organization() -> None:
+    incident_service, repository, _, _ = service_for()
+    created = incident_service.create_incident(create_command(), context())
+
+    with pytest.raises(IncidentNotFound):
+        incident_service.list_status_transitions("missing", context())
+    with pytest.raises(IncidentNotFound):
+        incident_service.list_status_transitions(created.id, context(OTHER_ORG))
+
+    assert incident_service.list_status_transitions(created.id, context()) == ()
+    assert_no_status_history(repository, created)
+
+
 def test_cross_organization_access_is_not_found_for_read_status_and_assignment() -> None:
     incident_service, repository, ids, _ = service_for()
     created = incident_service.create_incident(create_command(), context())

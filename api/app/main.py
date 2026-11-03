@@ -11,10 +11,16 @@ from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.db.session import build_engine, build_session_factory
+from app.modules.evidence_collection.repository import InMemoryEvidenceRepository
+from app.modules.evidence_collection.service import EvidenceService
+from app.modules.incidents.repository import InMemoryIncidentRepository
+from app.modules.incidents.service import IncidentService
+from app.modules.timeline.service import TimelineService
 
 DESCRIPTION = (
     "Nexora Team 4 incident management and AI-assisted root cause analysis API. "
-    "Phase 1 foundation: health checks and configuration only; domain endpoints are not implemented yet."
+    "Phase 1: health checks and in-memory incident HTTP operations. "
+    "Persistence and Team 1 authentication are not implemented."
 )
 
 
@@ -37,9 +43,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json",
         lifespan=lifespan,
     )
+    incident_repository = InMemoryIncidentRepository()
+    incident_service = IncidentService(incident_repository)
+    evidence_repository = InMemoryEvidenceRepository()
+    evidence_service = EvidenceService(evidence_repository, incident_service)
+    timeline_service = TimelineService(incident_service, incident_service, evidence_service)
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = build_session_factory(engine)
+    app.state.incident_repository = incident_repository
+    app.state.incident_service = incident_service
+    app.state.evidence_repository = evidence_repository
+    app.state.evidence_service = evidence_service
+    app.state.timeline_service = timeline_service
 
     app.add_middleware(
         CORSMiddleware,

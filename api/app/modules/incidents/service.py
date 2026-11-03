@@ -90,6 +90,17 @@ class IncidentService:
     def get_incident(self, incident_id: Team4EntityId, context: IncidentRequestContext) -> Incident:
         return self._load(incident_id, context).incident
 
+    def list_status_transitions(
+        self, incident_id: Team4EntityId, context: IncidentRequestContext
+    ) -> tuple[IncidentStatusTransition, ...]:
+        """Return stored status transitions for a visible Incident.
+
+        Missing and cross-organization ids raise IncidentNotFound. This does not
+        expose audit intents.
+        """
+        current = self._load(incident_id, context)
+        return self._repository.list_transitions(current.incident.id, context.organization_id)
+
     def change_status(
         self,
         incident_id: Team4EntityId,

@@ -11,7 +11,16 @@ def test_openapi_schema_is_available(client: TestClient) -> None:
     assert schema["info"]["title"] == "Nexora Team 4 Incident RCA API"
     assert schema["info"]["version"] == __version__
     assert schema["info"]["description"]
-    assert {"/health", "/api/v1/health", "/api/v1/health/database"} <= set(schema["paths"])
+    assert {
+        "/health",
+        "/api/v1/health",
+        "/api/v1/health/database",
+        "/api/v1/incidents",
+        "/api/v1/incidents/{incident_id}",
+        "/api/v1/incidents/{incident_id}/status",
+        "/api/v1/incidents/{incident_id}/assignment",
+        "/api/v1/incidents/{incident_id}/timeline",
+    } <= set(schema["paths"])
 
 
 def test_openapi_documents_health_response(client: TestClient) -> None:

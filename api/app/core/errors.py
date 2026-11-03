@@ -5,6 +5,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.modules.incidents.errors import (
+    IncidentConcurrencyConflict,
+    IncidentDomainError,
+    IncidentNotFound,
+    InvalidIncidentInput,
+    InvalidLifecycleTransition,
+    InvalidRequestContext,
+    OrganizationScopeError,
+    SameStatusTransition,
+)
 from app.schemas.errors import ErrorBody, ErrorDetail, ErrorResponse
 
 logger = logging.getLogger(__name__)
@@ -51,7 +61,38 @@ async def _unhandled_error(_request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+def map_incident_domain_error(exc: IncidentDomainError) -> tuple[int, str, str]:
+    """Map an incident domain error to HTTP status, public code, and public message."""
+    if isinstance(exc, IncidentNotFound):
+        return status.HTTP_404_NOT_FOUND, "INCIDENT_NOT_FOUND", str(exc)
+    if isinstance(exc, InvalidLifecycleTransition):
+        return status.HTTP_409_CONFLICT, "INVALID_LIFECYCLE_TRANSITION", str(exc)
+    if isinstance(exc, SameStatusTransition):
+        return status.HTTP_409_CONFLICT, "SAME_STATUS_TRANSITION", str(exc)
+    if isinstance(exc, IncidentConcurrencyConflict):
+        return status.HTTP_409_CONFLICT, "INCIDENT_CONFLICT", str(exc)
+    if isinstance(exc, (OrganizationScopeError, InvalidRequestContext)):
+        return status.HTTP_400_BAD_REQUEST, "INVALID_REQUEST_CONTEXT", str(exc)
+    if isinstance(exc, InvalidIncidentInput):
+        return status.HTTP_400_BAD_REQUEST, "INVALID_INCIDENT_INPUT", str(exc)
+    return (
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "INTERNAL_SERVER_ERROR",
+        "An unexpected error occurred.",
+    )
+
+
+async def _incident_domain_error(_request: Request, exc: IncidentDomainError) -> JSONResponse:
+    status_code, code, message = map_incident_domain_error(exc)
+    if status_code >= 500:
+        logger.error("Incident domain error", exc_info=exc)
+    else:
+        logger.warning("Rejected incident request", extra={"code": code})
+    return _error(status_code, ErrorBody(code=code, message=message))
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_error)  # type: ignore[arg-type]
     app.add_exception_handler(StarletteHTTPException, _http_error)  # type: ignore[arg-type]
+    app.add_exception_handler(IncidentDomainError, _incident_domain_error)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _unhandled_error)
