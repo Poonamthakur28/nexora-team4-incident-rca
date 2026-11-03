@@ -25,5 +25,17 @@ class InvalidConnectorContext(IngestionDomainError):
     """The injected mock connector context is missing a required trusted value."""
 
 
+class ObservationIdempotencyConflict(IngestionDomainError):
+    """Same provider-event identity was already reserved with different content.
+
+    This is the domain form of CT-04 `IDEMPOTENCY_CONFLICT`. No second
+    reservation is created. The message does not name the tenant, account,
+    title, or payload.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("This provider event was already accepted with different content.")
+
+
 class IngestionConfigurationError(IngestionDomainError):
     """An injected authorizer, hasher, or other dependency failed or is invalid."""

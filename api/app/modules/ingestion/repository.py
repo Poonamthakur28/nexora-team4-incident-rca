@@ -1,0 +1,123 @@
+"""Process-local observation reservation. Not a durable receipt store."""
+
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal, Protocol
+
+from app.modules.ingestion.contracts import Observation
+from app.modules.ingestion.errors import (
+    IngestionConfigurationError,
+    ObservationIdempotencyConflict,
+)
+from app.modules.ingestion.fingerprint import NormalizedObservation
+from app.modules.ingestion.normalization import IdempotencyIdentity
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationReservation:
+    """In-memory reservation for one provider-event identity.
+
+    This is not a CT-04 receipt and has no processing attempt.
+    """
+
+    observation_id: str
+    organization_id: str
+    observation: Observation
+    fingerprint_digest: bytes
+    canonical_payload: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ReservationResult:
+    """Outcome of an atomic reserve. `conflict` is raised, not returned."""
+
+    outcome: Literal["accepted", "duplicate"]
+    record: ObservationReservation
+
+
+class ObservationRepository(Protocol):
+    """Reserve or locate a provider-event identity inside one process."""
+
+    def reserve(
+        self, observation: Observation, normalized: NormalizedObservation
+    ) -> ReservationResult:
+        """Accept a new identity, return a duplicate, or raise a conflict.
+
+        `observation` and `normalized` must describe the same Stage 1-validated
+        input. `ObservationIngestionService.accept` guarantees that. This method
+        does not re-run Observation or fingerprint validation.
+        """
+
+    def get(self, observation_id: str, organization_id: str) -> ObservationReservation | None:
+        """Return a visible reservation, or None when it is missing or out of scope."""
+
+
+class InMemoryObservationRepository:
+    """Instance-owned reservation map. The lock is not a database transaction."""
+
+    def __init__(self, *, id_factory: Callable[[], str]) -> None:
+        self._id_factory = id_factory
+        self._records: dict[IdempotencyIdentity, ObservationReservation] = {}
+        self._by_id: dict[str, IdempotencyIdentity] = {}
+        self._lock = threading.Lock()
+
+    def reserve(
+        self, observation: Observation, normalized: NormalizedObservation
+    ) -> ReservationResult:
+        """See `ObservationRepository.reserve` for the caller trust boundary."""
+        with self._lock:
+            existing = self._records.get(normalized.identity)
+            if existing is not None:
+                if existing.fingerprint_digest == normalized.fingerprint.digest:
+                    return ReservationResult("duplicate", _copy_record(existing))
+                raise ObservationIdempotencyConflict()
+            record = _new_record(observation, normalized, self._id_factory, self._by_id)
+            self._records[normalized.identity] = record
+            self._by_id[record.observation_id] = normalized.identity
+            return ReservationResult("accepted", _copy_record(record))
+
+    def get(self, observation_id: str, organization_id: str) -> ObservationReservation | None:
+        with self._lock:
+            identity = self._by_id.get(observation_id)
+            if identity is None:
+                return None
+            record = self._records[identity]
+            if record.organization_id != organization_id:
+                return None
+            return _copy_record(record)
+
+
+def _new_record(
+    observation: Observation,
+    normalized: NormalizedObservation,
+    id_factory: Callable[[], str],
+    used_ids: dict[str, IdempotencyIdentity],
+) -> ObservationReservation:
+    try:
+        observation_id = id_factory()
+    except Exception as exc:
+        raise IngestionConfigurationError("The observation id factory failed.") from exc
+    if not isinstance(observation_id, str) or not observation_id.strip():
+        raise IngestionConfigurationError(
+            "The observation id factory must return a non-empty string."
+        )
+    if observation_id in used_ids:
+        raise IngestionConfigurationError("The observation id factory produced a repeated id.")
+    return ObservationReservation(
+        observation_id=observation_id,
+        organization_id=normalized.identity.organization_id,
+        observation=observation.model_copy(deep=True),
+        fingerprint_digest=bytes(normalized.fingerprint.digest),
+        canonical_payload=bytes(normalized.canonical_payload),
+    )
+
+
+def _copy_record(record: ObservationReservation) -> ObservationReservation:
+    return ObservationReservation(
+        observation_id=record.observation_id,
+        organization_id=record.organization_id,
+        observation=record.observation.model_copy(deep=True),
+        fingerprint_digest=bytes(record.fingerprint_digest),
+        canonical_payload=bytes(record.canonical_payload),
+    )
