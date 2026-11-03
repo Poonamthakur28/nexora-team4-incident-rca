@@ -43,8 +43,33 @@ Stage 1 does not check that `provenance.provider` equals `source`, or that
 Service resolution, severity mapping, and clock-skew cutoffs are also out of
 scope. No numeric skew tolerance is defined (D-16).
 
+## Normalization and fingerprinting
+
+M2 builds two in-memory values from a constructed Observation and a trusted
+organization id. It does not look up prior rows or reserve an identity.
+
+`IdempotencyIdentity` is the four Proposed D-09 dimensions: trusted
+organization id, `source`, stored `sourceAccountRef`, and opaque
+`sourceEventId`. The organization id is taken from the caller, not from the
+body. The identity is not hashed. `collectorRef` and `idempotencyKey` are not
+part of it.
+
+`PayloadFingerprint` is a digest of the Proposed D-10 business object:
+`source`, `sourceAccountRef`, `sourceEventId`, UTC `Z` `occurredAt`,
+`serviceRef`, `externalSeverity`, `title`, `description`, and `provenance`
+without `collectorRef`. Delivery fields (`idempotencyKey`, `correlationId`,
+`receivedAt`, `submittedAt`, `occurredAtSupplied`) are omitted. Omitted
+optional values and explicit `null` serialize the same way.
+
+Canonical JSON uses camelCase keys, lexicographic key order, UTF-8, and no
+insignificant whitespace. The hasher is injected. No production algorithm is
+chosen (D-10 Needs Team 5 Confirmation). `sourceAccountRef` as `ExternalRef`
+remains provisional (D-09, D-23).
+
 ## Not in this milestone
 
 No database, migration, HTTP route, durable receipt, idempotency store,
 processing attempt, audit outbox, or content storage. No live provider
-authentication, polling, or webhook. CT-04 decisions are not treated as Agreed.
+authentication, polling, or webhook. No duplicate detection, conflict outcome,
+Stage 2 check, service resolution, or severity mapping. CT-04 decisions are
+not treated as Agreed.

@@ -26,4 +26,4 @@ class InvalidConnectorContext(IngestionDomainError):
 
 
 class IngestionConfigurationError(IngestionDomainError):
-    """An injected Stage 1 dependency is unavailable or returned an invalid result."""
+    """An injected authorizer, hasher, or other dependency failed or is invalid."""

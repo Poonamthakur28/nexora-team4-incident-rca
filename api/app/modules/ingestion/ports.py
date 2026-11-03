@@ -1,4 +1,4 @@
-"""Mock connector ports for RCA-002 Stage 1. Not a production security boundary."""
+"""Mock connector and hasher ports for RCA-002. Not a production security boundary."""
 
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -43,6 +43,18 @@ class SourceAccountAuthorizer(Protocol):
         organization_id: str,
     ) -> bool:
         """Return whether this registration may use the account in this organization."""
+
+
+class PayloadHasher(Protocol):
+    """Hash canonical observation bytes. The algorithm is unset (D-10).
+
+    Team 5 has not confirmed a production digest. Implementations are injected
+    stand-ins for tests and later wiring. This port does not choose SHA-256,
+    SHA-3, or BLAKE2.
+    """
+
+    def digest(self, canonical_payload: bytes) -> bytes:
+        """Return a digest of the canonical UTF-8 payload."""
 
 
 class InMemorySourceAccountAuthorizer:
