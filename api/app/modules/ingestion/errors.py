@@ -38,4 +38,4 @@ class ObservationIdempotencyConflict(IngestionDomainError):
 
 
 class IngestionConfigurationError(IngestionDomainError):
-    """An injected authorizer, hasher, or other dependency failed or is invalid."""
+    """An injected authorizer, hasher, resolver, mapper, or other dependency failed."""

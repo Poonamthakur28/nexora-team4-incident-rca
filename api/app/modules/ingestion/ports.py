@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.modules.incidents.contracts import IncidentSeverity
 from app.modules.ingestion.errors import InvalidConnectorContext
 from app.shared.identifiers import ExternalRef
 
@@ -55,6 +56,103 @@ class PayloadHasher(Protocol):
 
     def digest(self, canonical_payload: bytes) -> bytes:
         """Return a digest of the canonical UTF-8 payload."""
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceResolution:
+    """Result of a mock service lookup. `resolved` is False for every miss."""
+
+    resolved: bool
+    service_ref: ExternalRef | None = None
+
+
+class ServiceResolver(Protocol):
+    """Resolve a provider service id in a trusted organization (D-03).
+
+    The real catalog owner is unset. Implementations are injected stand-ins.
+    This port does not disclose whether a service exists in another organization.
+    """
+
+    def resolve(
+        self, provider_service_ref: ExternalRef | None, organization_id: str
+    ) -> ServiceResolution:
+        """Return one resolved canonical ref, or unresolved."""
+
+
+class InMemoryServiceResolver:
+    """Instance-owned allow-list. Not a coordinator-approved catalog."""
+
+    def __init__(self, grants: Iterable[tuple[str, ExternalRef, ExternalRef]]) -> None:
+        self._grants = tuple(
+            (organization_id, provider, canonical)
+            for organization_id, provider, canonical in grants
+        )
+
+    def resolve(
+        self, provider_service_ref: ExternalRef | None, organization_id: str
+    ) -> ServiceResolution:
+        if provider_service_ref is None:
+            return ServiceResolution(resolved=False)
+        matches = [
+            canonical
+            for grant_org, provider, canonical in self._grants
+            if grant_org == organization_id and provider == provider_service_ref
+        ]
+        unique = {(ref.owner, ref.id) for ref in matches}
+        if len(unique) != 1:
+            return ServiceResolution(resolved=False)
+        return ServiceResolution(resolved=True, service_ref=matches[0])
+
+
+@dataclass(frozen=True, slots=True)
+class SeverityMapping:
+    """Result of a mock severity map. Unmapped pairs have no default."""
+
+    mapped: bool
+    severity: IncidentSeverity | None = None
+    version: str | None = None
+
+
+class SeverityMapper(Protocol):
+    """Map provider severity to a canonical IncidentSeverity (D-05).
+
+    Version token format is unset. Implementations are injected stand-ins, not
+    a production mapping document.
+    """
+
+    def map(self, source: str, external_severity: str | None) -> SeverityMapping:
+        """Return a mapped severity and version, or unmapped."""
+
+
+# Illustrative CT-04 §8.3 fixture table. Not an approved production mapping.
+SYNTHETIC_MONITOR_SEVERITY_FIXTURE_V1 = {
+    ("synthetic-monitor", "SEV1"): "critical",
+    ("synthetic-monitor", "SEV2"): "high",
+    ("synthetic-monitor", "SEV3"): "medium",
+    ("synthetic-monitor", "SEV4"): "low",
+}
+SYNTHETIC_MONITOR_SEVERITY_FIXTURE_VERSION = "synthetic-monitor-severity/v1"
+
+
+class InMemorySeverityMapper:
+    """Instance-owned fixture table. Not a Team 5 mapping version."""
+
+    def __init__(
+        self,
+        pairs: dict[tuple[str, str], IncidentSeverity] | None = None,
+        *,
+        version: str = SYNTHETIC_MONITOR_SEVERITY_FIXTURE_VERSION,
+    ) -> None:
+        self._pairs = dict(SYNTHETIC_MONITOR_SEVERITY_FIXTURE_V1 if pairs is None else pairs)
+        self._version = version
+
+    def map(self, source: str, external_severity: str | None) -> SeverityMapping:
+        if external_severity is None:
+            return SeverityMapping(mapped=False)
+        severity = self._pairs.get((source, external_severity))
+        if severity is None:
+            return SeverityMapping(mapped=False)
+        return SeverityMapping(mapped=True, severity=severity, version=self._version)
 
 
 class InMemorySourceAccountAuthorizer:

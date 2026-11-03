@@ -53,6 +53,8 @@ def assert_reservation_only(result: ReservationResult) -> None:
     assert not hasattr(result.record, "delivery_id")
     assert not hasattr(result.record, "processing_status")
     assert not hasattr(result.record, "attempt")
+    assert not hasattr(result.record, "in_flight")
+    assert result.record.assessment is None
 
 
 def test_first_insert_is_accepted() -> None:
