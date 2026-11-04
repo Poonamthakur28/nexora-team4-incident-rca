@@ -1,7 +1,12 @@
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.core.errors import map_incident_domain_error
+from app.core.errors import map_evidence_domain_error, map_incident_domain_error
+from app.modules.evidence_collection.errors import (
+    EvidenceNotFound,
+    EvidenceServiceConfigurationError,
+    InvalidEvidenceInput,
+)
 from app.main import create_app
 from app.modules.incidents.errors import (
     IncidentNotFound,
@@ -69,3 +74,17 @@ def test_incident_domain_errors_map_to_reviewed_http_codes() -> None:
     status_code, code, message = map_incident_domain_error(uncertain)
     assert (status_code, code, message) == (500, "INTERNAL_SERVER_ERROR", "An unexpected error occurred.")
     assert "secret-orphan-id" not in message
+
+
+def test_evidence_domain_errors_map_to_http_codes() -> None:
+    assert map_evidence_domain_error(EvidenceNotFound("ev-1")) == (
+        404,
+        "EVIDENCE_NOT_FOUND",
+        "Evidence ev-1 was not found.",
+    )
+    assert map_evidence_domain_error(InvalidEvidenceInput("bad input"))[0:2] == (400, "INVALID_EVIDENCE_INPUT")
+    assert map_evidence_domain_error(EvidenceServiceConfigurationError("clock")) == (
+        500,
+        "INTERNAL_SERVER_ERROR",
+        "An unexpected error occurred.",
+    )

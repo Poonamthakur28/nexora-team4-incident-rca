@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.incidents.context import IncidentRequestContext
 from app.modules.incidents.errors import InvalidRequestContext
+from app.modules.evidence_collection.service import EvidenceService
 from app.modules.incidents.service import IncidentService
 from app.modules.timeline.service import TimelineService
 from app.shared.identifiers import ExternalRef
@@ -35,6 +36,11 @@ def get_incident_service(request: Request) -> IncidentService:
 def get_timeline_service(request: Request) -> TimelineService:
     """Return the process-local TimelineService attached to this FastAPI app."""
     return request.app.state.timeline_service
+
+
+def get_evidence_service(request: Request) -> EvidenceService:
+    """Return the process-local EvidenceService attached to this FastAPI app."""
+    return request.app.state.evidence_service
 
 
 def get_incident_request_context(

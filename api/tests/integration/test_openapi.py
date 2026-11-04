@@ -20,6 +20,7 @@ def test_openapi_schema_is_available(client: TestClient) -> None:
         "/api/v1/incidents/{incident_id}/status",
         "/api/v1/incidents/{incident_id}/assignment",
         "/api/v1/incidents/{incident_id}/timeline",
+        "/api/v1/incidents/{incident_id}/evidence",
     } <= set(schema["paths"])
 
 

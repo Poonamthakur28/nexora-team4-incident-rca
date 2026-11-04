@@ -5,6 +5,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.modules.evidence_collection.errors import (
+    EvidenceDomainError,
+    EvidenceNotFound,
+    InvalidEvidenceInput,
+)
 from app.modules.incidents.errors import (
     IncidentConcurrencyConflict,
     IncidentDomainError,
@@ -91,8 +96,31 @@ async def _incident_domain_error(_request: Request, exc: IncidentDomainError) ->
     return _error(status_code, ErrorBody(code=code, message=message))
 
 
+def map_evidence_domain_error(exc: EvidenceDomainError) -> tuple[int, str, str]:
+    """Map an Evidence domain error to HTTP status, public code, and public message."""
+    if isinstance(exc, EvidenceNotFound):
+        return status.HTTP_404_NOT_FOUND, "EVIDENCE_NOT_FOUND", str(exc)
+    if isinstance(exc, InvalidEvidenceInput):
+        return status.HTTP_400_BAD_REQUEST, "INVALID_EVIDENCE_INPUT", str(exc)
+    return (
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "INTERNAL_SERVER_ERROR",
+        "An unexpected error occurred.",
+    )
+
+
+async def _evidence_domain_error(_request: Request, exc: EvidenceDomainError) -> JSONResponse:
+    status_code, code, message = map_evidence_domain_error(exc)
+    if status_code >= 500:
+        logger.error("Evidence domain error", exc_info=exc)
+    else:
+        logger.warning("Rejected evidence request", extra={"code": code})
+    return _error(status_code, ErrorBody(code=code, message=message))
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_error)  # type: ignore[arg-type]
     app.add_exception_handler(StarletteHTTPException, _http_error)  # type: ignore[arg-type]
     app.add_exception_handler(IncidentDomainError, _incident_domain_error)  # type: ignore[arg-type]
+    app.add_exception_handler(EvidenceDomainError, _evidence_domain_error)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _unhandled_error)
