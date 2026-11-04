@@ -436,6 +436,15 @@ def test_service_has_no_update_or_delete_operations() -> None:
     assert not hasattr(service, "delete_evidence")
 
 
+def test_can_verify_content_references_reports_injected_verifier() -> None:
+    incidents = make_incident_service()
+    without_verifier, _, _, _ = evidence_service(incidents)
+    with_verifier, _, _, _ = evidence_service(incidents, verifier=FakeVerifier())
+
+    assert without_verifier.can_verify_content_references() is False
+    assert with_verifier.can_verify_content_references() is True
+
+
 COLLECTOR = as_external_ref("team5.connector", "conn_synth_monitor_01")
 ACCOUNT = as_external_ref("synthetic-monitor", "acct_synth_0001")
 CONTENT_REF = "content_synth_0051"

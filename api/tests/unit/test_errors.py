@@ -1,7 +1,11 @@
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.core.errors import map_evidence_domain_error, map_incident_domain_error
+from app.core.errors import (
+    ContentReferenceNotConfigured,
+    map_evidence_domain_error,
+    map_incident_domain_error,
+)
 from app.modules.evidence_collection.errors import (
     EvidenceNotFound,
     EvidenceServiceConfigurationError,
@@ -88,3 +92,26 @@ def test_evidence_domain_errors_map_to_http_codes() -> None:
         "INTERNAL_SERVER_ERROR",
         "An unexpected error occurred.",
     )
+
+
+def test_unconfigured_content_reference_returns_400_without_internal_details(
+    settings: Settings,
+) -> None:
+    app = create_app(settings)
+
+    @app.get("/content-ref-unconfigured")
+    def unconfigured() -> None:
+        raise ContentReferenceNotConfigured()
+
+    with TestClient(app) as client:
+        response = client.get("/content-ref-unconfigured")
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "CONTENT_REFERENCE_NOT_CONFIGURED",
+            "message": "Content-reference verification is not configured.",
+        }
+    }
+    assert "content_verifier" not in response.text
+    assert "Traceback" not in response.text

@@ -25,6 +25,13 @@ from app.schemas.errors import ErrorBody, ErrorDetail, ErrorResponse
 logger = logging.getLogger(__name__)
 
 
+class ContentReferenceNotConfigured(Exception):
+    """HTTP policy: a contentRef was supplied but no verifier is configured."""
+
+    def __init__(self) -> None:
+        super().__init__("Content-reference verification is not configured.")
+
+
 def _error(status_code: int, body: ErrorBody) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -118,9 +125,23 @@ async def _evidence_domain_error(_request: Request, exc: EvidenceDomainError) ->
     return _error(status_code, ErrorBody(code=code, message=message))
 
 
+async def _content_reference_not_configured(
+    _request: Request, _exc: ContentReferenceNotConfigured
+) -> JSONResponse:
+    logger.warning("Rejected evidence request", extra={"code": "CONTENT_REFERENCE_NOT_CONFIGURED"})
+    return _error(
+        status.HTTP_400_BAD_REQUEST,
+        ErrorBody(
+            code="CONTENT_REFERENCE_NOT_CONFIGURED",
+            message="Content-reference verification is not configured.",
+        ),
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_error)  # type: ignore[arg-type]
     app.add_exception_handler(StarletteHTTPException, _http_error)  # type: ignore[arg-type]
     app.add_exception_handler(IncidentDomainError, _incident_domain_error)  # type: ignore[arg-type]
     app.add_exception_handler(EvidenceDomainError, _evidence_domain_error)  # type: ignore[arg-type]
+    app.add_exception_handler(ContentReferenceNotConfigured, _content_reference_not_configured)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _unhandled_error)

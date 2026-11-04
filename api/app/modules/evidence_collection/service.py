@@ -53,6 +53,14 @@ class EvidenceService:
         self._id_factory = id_factory or new_evidence_id
         self._clock = clock or (lambda: datetime.now(UTC))
 
+    def can_verify_content_references(self) -> bool:
+        """Return whether an injected content-reference verifier is configured.
+
+        This is a composition check for HTTP and other callers. It does not
+        verify a reference and does not invent storage behavior.
+        """
+        return self._content_verifier is not None
+
     def record_manual_evidence(
         self, command: RecordManualEvidence, context: IncidentRequestContext
     ) -> Evidence:
